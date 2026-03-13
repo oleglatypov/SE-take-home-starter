@@ -171,4 +171,4 @@ The best submissions we've seen use AI as an accelerator while bringing their ow
 
 ## Questions?
 
-Email [engineering@pathos.com] — we'll respond within 24 hours.
+Email [chris.poshka@pathos.com] — we'll respond within 24 hours.
