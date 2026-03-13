@@ -1,0 +1,52 @@
+patient_id,trial_id,site_id,enrollment_date,age,sex,weight_kg,dose_level,adverse_events,lab_notes,response_assessment,last_visit_date,status
+PT-001,NCT-001,SITE-A01,2023-04-12,67,M,82.3,400mg BID,"fatigue;nausea","PSA 12.4 ng/mL at baseline, declining trend",partial_response,2024-01-15,active
+PT-002,NCT-001,SITE-A01,2023-04-18,72,M,91.0,400mg BID,"fatigue;anemia;bone_pain","PSA 45.2 ng/mL, stable",stable_disease,2024-01-20,active
+PT-003,NCT-001,SITE-B03,04/25/2023,58,M,77.5,400mg BID,,"PSA 8.1 ng/mL, significant decline (-62%)",partial_response,01/22/2024,active
+PT-004,NCT-001,SITE-B03,2023-05-01,-3,M,88.2,400mg BID,"nausea;diarrhea","Dr. Michael Chen noted elevated liver enzymes. Patient John Williams (MRN: 4451892) requires close monitoring",stable_disease,2024-02-01,active
+PT-005,NCT-001,SITE-A01,2023-05-10,71,M,79.8,400mg BID,"fatigue;nausea;rash","PSA 22.7 ng/mL, slight increase — consider dose adjustment",progressive_disease,2024-02-10,withdrawn
+PT-006,NCT-001,SITE-C07,2023-05-15,64,F,68.1,400mg BID,"fatigue","PSA not applicable (female patient enrolled in error?)",N/A,2023-06-02,screen_fail
+PT-007,NCT-001,SITE-A01,2023-06-01,69,M,85.4,400mg BID,"fatigue;nausea","PSA 18.9 ng/mL at baseline",stable_disease,2024-03-01,active
+PT-008,NCT-001,SITE-B03,2023-06-15,74,M,92.1,400mg BID,"anemia;fatigue;thrombocytopenia","PSA 31.4 ng/mL. Grade 3 anemia — dose held for 2 weeks",stable_disease,2024-03-10,active
+PT-009,NCT-001,SITE-C07,Jun 20 2023,76,M,70.2,400mg BID,"nausea;vomiting;fatigue","PSA 55.8 ng/mL, rising. Poor prognosis.",progressive_disease,Mar 15 2024,withdrawn
+PT-010,NCT-001,SITE-A01,2023-07-01,62,M,83.7,400mg BID,,"PSA 14.2 ng/mL, declining (-41%)",partial_response,2024-03-20,active
+PT-011,NCT-001,SITE-B03,2023-07-10,,M,78.9,400mg BID,"fatigue","PSA 27.3 ng/mL, stable",stable_disease,2024-04-01,active
+PT-012,NCT-001,SITE-C07,2023-07-22,70,M,86.5,400mg BID,"diarrhea;nausea","PSA 9.8 ng/mL, significant decline (-73%). Excellent response.",partial_response,2024-04-10,active
+PT-013,NCT-001,SITE-A01,2023-08-05,65,M,81.0,200mg BID,"fatigue","PSA 19.5 ng/mL. Note: patient was on 200mg BID (dose escalation cohort)",stable_disease,2024-04-20,active
+PT-014,NCT-001,SITE-B03,2023-08-18,73,M,0,400mg BID,"fatigue;nausea;dizziness","PSA 42.1 ng/mL, rising",progressive_disease,2024-05-01,withdrawn
+PT-015,NCT-001,SITE-C07,2023-09-01,68,M,84.3,400mg BID,"anemia","PSA 16.7 ng/mL, declining (-38%)",partial_response,2024-05-15,active
+PT-003,NCT-001,SITE-B03,04/25/2023,58,M,77.5,400mg BID,,"PSA 8.1 ng/mL, significant decline (-62%). UPDATE: confirmed PR by RECIST",confirmed_response,03/15/2024,active
+PT-016,NCT-001,SITE-A01,2023-09-15,155,M,83.0,400mg BID,"fatigue;nausea","PSA 25.4 ng/mL at baseline",stable_disease,2024-06-01,active
+PT-017,NCT-001,SITE-B03,2023-10-01,71,M,88.7,400mg BID,"nausea;fatigue;hepatotoxicity","Grade 3 hepatotoxicity — ALT 5x ULN. Dose interrupted. Contact: sarah.johnson@site-b03.clinic",stable_disease,2024-06-15,active
+PT-018,NCT-001,SITE-C07,2023-10-15,66,M,79.4,400mg BID,"fatigue","PSA 11.3 ng/mL, declining. Good tolerability.",partial_response,2024-07-01,active
+PT-019,NCT-001,SITE-A01,2023/11/01,60,M,85.1,400mg BID,"nausea;diarrhea","PSA 33.8 ng/mL, stable",stable_disease,2024-07-15,active
+PT-020,NCT-001,SITE-B03,2023-11-15,75,M,90.3,400mg BID,"fatigue;anemia;bone_pain","PSA 67.2 ng/mL, rising rapidly. Recommend discontinuation.",progressive_disease,2024-08-01,withdrawn
+PT-021,NCT-003,SITE-D01,2024-02-01,52,F,64.2,50mg QD,"nausea;headache","Baseline tumor measurements recorded. Dr. Rachel Kim performing assessment.",stable_disease,2024-08-15,active
+PT-022,NCT-003,SITE-D01,2024-02-15,48,M,78.3,50mg QD,"fatigue","Tumor stable at first assessment. PK sample collected.",stable_disease,2024-09-01,active
+PT-023,NCT-003,SITE-D01,2024-03-01,61,F,58.7,100mg QD,"nausea;rash;fatigue","Dose escalation to 100mg cohort. Grade 2 rash resolved with topical treatment",stable_disease,2024-09-15,active
+PT-024,NCT-003,SITE-E02,2024-03-15,55,M,82.1,100mg QD,,"No significant findings at week 4 visit",stable_disease,2024-10-01,active
+PT-025,NCT-003,SITE-D01,2024-04-01,44,F,61.8,100mg QD,"hepatotoxicity","Grade 2 ALT elevation (3x ULN). Holding dose per protocol.",N/A,2024-06-15,withdrawn
+PT-026,NCT-003,SITE-E02,2024-04-15,59,M,75.6,200mg QD,"fatigue;nausea;diarrhea","200mg cohort. Manageable GI toxicity. PD biomarker: SMARCA2 reduction 45% — below target.",stable_disease,2024-11-01,active
+PT-027,NCT-003,SITE-D01,2024-05-01,63,F,67.4,200mg QD,"fatigue;rash","200mg cohort. PD biomarker: SMARCA2 reduction 82% — on target.",stable_disease,2024-11-15,active
+PT-028,NCT-003,SITE-E02,15/05/2024,50,M,80.9,200mg QD,"nausea","200mg cohort. PK trough level within expected range.",stable_disease,2024-12-01,active
+,NCT-003,SITE-D01,2024-06-01,57,F,63.5,200mg QD,"headache;fatigue","Screening visit — consent obtained. Lab results pending.",N/A,2024-06-01,screen_fail
+PT-030,NCT-003,SITE-E02,2024-06-15,46,M,77.2,200mg QD,"diarrhea;fatigue","PD biomarker pending. Weight stable.",stable_disease,2025-01-01,active
+PT-031,NCT-007,SITE-F01,2021-06-15,68,M,83.5,200mg BID,"fatigue;nausea","Dose escalation Phase I — 200mg cohort. PSA 28.4 ng/mL at baseline.",stable_disease,2021-12-15,completed
+PT-032,NCT-007,SITE-F01,2021-07-01,73,M,91.2,200mg BID,"fatigue;diarrhea","PSA 19.7 ng/mL. Minor GI symptoms.",partial_response,2022-01-01,completed
+PT-033,NCT-007,SITE-F01,2021-08-01,66,M,79.8,400mg BID,"fatigue;nausea;headache","Dose escalation to 400mg. PSA 35.1 ng/mL, declining.",partial_response,2022-02-15,completed
+PT-034,NCT-007,SITE-G03,2021-09-01,71,M,87.3,400mg BID,"anemia;fatigue","PSA 52.3 ng/mL. Grade 2 anemia — monitoring.",stable_disease,2022-03-15,completed
+PT-035,NCT-007,SITE-F01,2021-10-01,59,M,76.4,400mg BID,"nausea","PSA 15.8 ng/mL, significant decline. Dose tolerated well.",partial_response,2022-04-01,completed
+PT-036,NCT-007,SITE-G03,2021-11-01,77,M,93.5,400mg BID,"fatigue;bone_pain;nausea","PSA 78.1 ng/mL, rising. Disease progression on imaging.",progressive_disease,2022-01-15,withdrawn
+PT-037,NCT-007,SITE-F01,2021-12-01,64,M,80.7,600mg BID,"nausea;vomiting;hepatotoxicity","600mg cohort — DISCONTINUED. Grade 3 hepatotoxicity. Patient SSN visible in old system: 412-XX-8891. DLT declared.",N/A,2022-01-30,withdrawn
+PT-038,NCT-007,SITE-G03,2022-01-15,70,M,85.0,400mg BID,fatigue,"PSA 23.6 ng/mL, stable. Well tolerated.",stable_disease,2022-07-15,completed
+PT-039,NCT-007,SITE-F01,2022-02-01,62,M,78.9,400mg BID,"fatigue;rash","PSA 11.2 ng/mL, declining (-55%). Mild rash — topical treatment.",partial_response,2022-08-01,completed
+PT-040,NCT-007,SITE-G03,2022-03-01,69,Male,82.4,400mg BID,"nausea;fatigue","PSA 41.5 ng/mL. Compliance confirmed by PK levels.",stable_disease,2022-09-01,completed
+PT-041,NCT-002,SITE-H01,2020-07-15,54,F,72.1,vemurafenib + cobimetinib,"photosensitivity;fatigue;diarrhea","BRAF V600E confirmed. Baseline imaging complete.",partial_response,2021-06-01,completed
+PT-042,NCT-002,SITE-H01,2020-08-01,61,M,88.6,vemurafenib + cobimetinib,"photosensitivity;rash;pyrexia","Dose modification required for grade 2 photosensitivity.",stable_disease,2021-07-15,completed
+PT-043,NCT-002,SITE-I04,2020-09-01,47,F,65.3,vemurafenib + cobimetinib,"fatigue;nausea;photosensitivity","Excellent response at week 12. Tumor shrinkage -45%.",complete_response,2021-12-01,completed
+PT-044,NCT-002,SITE-H01,2020-10-15,58,M,81.7,vemurafenib monotherapy,"fatigue;arthralgia","Control arm — vemurafenib monotherapy. Stable at month 3.",stable_disease,2021-09-01,completed
+PT-045,NCT-002,SITE-I04,2020-11-01,66,F,59.8,vemurafenib + cobimetinib,"photosensitivity;hepatotoxicity;fatigue","Grade 3 hepatotoxicity at month 2. Dose reduced by 25%.",stable_disease,2021-10-15,active
+PT-046,NCT-002,SITE-H01,2020-12-01,53,M,90.0,vemurafenib + cobimetinib,"photosensitivity;diarrhea","Good tolerance after initial photosensitivity management.",partial_response,2022-01-01,completed
+PT-047,NCT-002,SITE-I04,2021-01-15,71,F,62.5,vemurafenib + cobimetinib,"fatigue;pyrexia;photosensitivity","Elderly patient — dose adjustment per protocol. Manageable AEs.",stable_disease,2022-03-01,completed
+PT-048,NCT-002,SITE-H01,2021-02-01,49,M,84.2,vemurafenib + cobimetinib,"rash;diarrhea;fatigue",,partial_response,2022-04-15,completed
+PT-049,NCT-002,SITE-I04,2021-03-01,62,F,70.8,vemurafenib + cobimetinib,"photosensitivity;nausea","Disease progression at month 8. Switched to next line.",progressive_disease,2021-11-01,withdrawn
+PT-050,NCT-002,SITE-H01,2021-04-01,56,M,76.3,vemurafenib monotherapy,"arthralgia;fatigue","Control arm. Stable disease through month 6. Note from CRA Lisa Park: data query resolved.",stable_disease,2022-02-01,completed
