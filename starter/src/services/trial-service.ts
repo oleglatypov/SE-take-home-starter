@@ -2,13 +2,13 @@ import { trials as trialData } from "../data.js";
 import type { ClinicalTrial } from "../types.js";
 
 interface TrialFilters {
-  phase?: string;
-  status?: string;
-  minEnrollment?: number;
-  sponsor?: string;
-  search?: string;
-  sort?: string;
-  order?: string;
+  phase?: string | undefined;
+  status?: string | undefined;
+  minEnrollment?: number | undefined;
+  sponsor?: string | undefined;
+  search?: string | undefined;
+  sort?: string | undefined;
+  order?: string | undefined;
 }
 
 const trialCache = new Map<string, ClinicalTrial>();
