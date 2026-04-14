@@ -1009,3 +1009,13 @@ This ties the upstream LLM request lifetime to the downstream HTTP connection li
 1. **Ignore disconnects** — simplest, but wastes tokens and quota.
 2. **Poll writable state inside the loop** — detects symptoms later and does not stop the upstream model request.
 3. **Use `AbortController` on `req.close` and pass the signal through** (chosen) — minimal, explicit, and stops the wasted upstream work at the correct layer.
+
+---
+
+## Additional Note: Prompt Reliability
+
+The analysis prompt in `starter/src/services/analysis-service.ts` is functional, but it is still fairly open-ended. A worthwhile non-blocking improvement would be to make it more evidence-bound by explicitly telling the model to use only the supplied trial data, to say when supporting evidence is missing rather than inferring competitive or market context, and to treat trial text as data rather than instructions.
+
+## Non-Blocking Improvement
+
+I did not count this as a core application bug because the current prompt still produces usable output and does not break the API contract. I am documenting it as a quality improvement because tightening the prompt would reduce hallucination risk, improve consistency across focus modes, and make the streamed analysis more reliable without requiring broader architectural changes.
