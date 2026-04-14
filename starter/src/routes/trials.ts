@@ -58,10 +58,15 @@ router.post(
       return;
     }
 
-    const { focus } = req.body;
+    const { focus } = req.body ?? {};
+
+    if (focus !== "safety" && focus !== "efficacy" && focus !== "competitive") {
+      res.status(400).json({ error: "Invalid focus" });
+      return;
+    }
 
     try {
-      await streamAnalysis(trial, focus as any, res);
+      await streamAnalysis(trial, focus, res);
     } catch (err) {
       if (!res.headersSent) {
         res.status(500).json({
