@@ -72,8 +72,8 @@ export function listTrials(filters: TrialFilters): {
         cmp = a.enrollment - b.enrollment;
         break;
       case "startDate":
-        cmp =
-          new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+          cmp =
+            new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
         break;
       case "adverseEventRate":
         cmp = a.adverseEventRate - b.adverseEventRate;
