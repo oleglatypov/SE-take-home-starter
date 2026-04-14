@@ -39,6 +39,11 @@ describe("trial-service", () => {
       expect(result.trials.length).toBeGreaterThan(0);
     });
 
+    it("applies filter when minEnrollment is 0", () => {
+      const result = listTrials({ minEnrollment: 0 });
+      expect(result.total).toBeGreaterThan(0);
+    });
+
     it("sorts by startDate descending by default", () => {
       const result = listTrials({ sort: "startDate" });
       const dates = result.trials.map((t) => new Date(t.startDate).getTime());

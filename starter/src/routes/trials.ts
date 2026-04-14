@@ -9,14 +9,22 @@ import type { TrialListResponse, ErrorResponse } from "../types.js";
 
 const router = Router();
 
-router.get("/", (req: Request, res: Response<TrialListResponse>) => {
+router.get("/", (req: Request, res: Response<TrialListResponse | ErrorResponse>) => {
   const { phase, status, minEnrollment, sponsor, search, sort, order } =
     req.query;
+
+  const parsedMinEnrollment =
+    minEnrollment === undefined ? undefined : Number(minEnrollment);
+
+  if (parsedMinEnrollment !== undefined && !Number.isFinite(parsedMinEnrollment)) {
+    res.status(400).json({ error: "Invalid minEnrollment" });
+    return;
+  }
 
   const result = listTrials({
     phase: phase as string | undefined,
     status: status as string | undefined,
-    minEnrollment: minEnrollment ? Number(minEnrollment) : undefined,
+    minEnrollment: parsedMinEnrollment,
     sponsor: sponsor as string | undefined,
     search: search as string | undefined,
     sort: sort as string | undefined,
