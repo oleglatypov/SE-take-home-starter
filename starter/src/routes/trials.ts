@@ -26,8 +26,8 @@ router.get("/", (req: Request, res: Response<TrialListResponse>) => {
   res.json(result);
 });
 
-router.get("/:id", (req: Request, res: Response) => {
-  const trial = getTrialById(req.params.id!);
+router.get("/:id", (req: Request<{ id: string }>, res: Response) => {
+  const trial = getTrialById(req.params.id);
   if (!trial) {
     res.status(404).json({ error: "Trial not found" });
     return;
@@ -35,8 +35,8 @@ router.get("/:id", (req: Request, res: Response) => {
   res.json(trial);
 });
 
-router.get("/:id/summary", (req: Request, res: Response) => {
-  const trial = getTrialById(req.params.id!);
+router.get("/:id/summary", (req: Request<{ id: string }>, res: Response) => {
+  const trial = getTrialById(req.params.id);
   if (!trial) {
     res.status(404).json({ error: "Trial not found" });
     return;
