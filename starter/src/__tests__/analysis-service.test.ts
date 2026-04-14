@@ -79,7 +79,7 @@ describe("analysis-service", () => {
       expect(summary.riskScore).toBe(2);
     });
 
-    it("KNOWN BUG candidate: AE rate exactly 50 applies +2 not +3 (> 50 is exclusive)", () => {
+    it("AE rate exactly 50 applies +2, not +3 (> 50 is exclusive)", () => {
       // The +3 branch fires only when adverseEventRate > 50. At exactly 50, +2 applies.
       // Whether 50% AE rate should trigger the high-risk +3 depends on clinical definition.
       // If the intent is >= 50 → high risk, this is a boundary error.

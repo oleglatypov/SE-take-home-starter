@@ -3,6 +3,5 @@ dist/
 .env
 *.tgz
 .DS_Store
-ADR.md
 logs/
 
