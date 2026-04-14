@@ -534,3 +534,49 @@ Once SSE headers are sent, the stream body is the only valid channel left for co
 1. **End the stream without writing an error event** — better than hanging, but still opaque to the client.
 2. **Move `writeHead(...)` until after the first chunk** — more complex and still does not solve mid-stream failure handling.
 3. **Catch inside the stream loop, emit an error event, and always `end()`** (chosen) — minimal, explicit, and correct for the SSE lifecycle.
+
+---
+
+## Bug 11: Risk scoring treated high response rate as a negative signal
+
+### Description
+
+The risk score calculation added points when a trial had a response rate above 30%:
+
+```typescript
+if (trial.responseRate !== null && trial.responseRate > 30) {
+  score += 2;
+}
+```
+
+That inverted the intended meaning of the score. A high response rate is generally a positive efficacy outcome, not a reason to increase clinical risk. The code was effectively penalizing strong trial performance.
+
+I discovered this by reviewing the scoring logic after the earlier summary fix and checking how the response-rate branch interacted with the rest of the risk rubric.
+
+### Real-World Impact
+
+In production, trials with strong efficacy would appear riskier than similar trials with poorer efficacy. That would distort any consumer relying on `riskScore` for prioritization, summary displays, or downstream ranking logic.
+
+### Fix
+
+**File:** `starter/src/services/analysis-service.ts`, response-rate branch in `calculateRiskScore`
+
+Change the signal so poor efficacy increases risk instead of strong efficacy:
+
+```typescript
+if (trial.responseRate !== null && trial.responseRate < 20) {
+  score += 2;
+}
+```
+
+I also added a regression test in `starter/src/__tests__/analysis-service.test.ts` using two otherwise-identical trial objects, proving that a high response-rate trial does not receive a higher risk score than a low response-rate trial.
+
+### Why This Fix Is Correct
+
+Low response rate is a plausible negative efficacy signal, while high response rate is not. This change preserves response rate as a meaningful input to the score without inverting its clinical interpretation.
+
+### Alternatives Considered
+
+1. **Remove the response-rate component entirely** — simpler, but throws away a legitimate efficacy signal.
+2. **Keep penalizing high response rate** — clinically backwards and inconsistent with the rest of the score semantics.
+3. **Penalize clearly poor response rate instead** (chosen) — minimal, defensible, and aligned with the intended meaning of risk.
