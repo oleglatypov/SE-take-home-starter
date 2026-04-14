@@ -17,6 +17,41 @@ That drove three rules:
 - The pipeline is a library function, so deterministic behavior matters more than interactive convenience.
 - The CSV format is small enough that a manual parser is acceptable for now.
 
+## Pipeline Structure
+
+The pipeline is organized as a small sequence of pure transformation steps plus one file-loading wrapper:
+
+1. Parse raw CSV rows into `Record<string, string>` objects.
+2. Normalize individual fields: dates, categories, free text, and nullable values.
+3. Flag invalid or suspicious records for quarantine while preserving issue reasons.
+4. Deduplicate records by patient/trial/site/enrollment key, keeping the newest conflicting record.
+5. Schema-validate clean records and return `{ clean, quarantined, summary }`.
+
+The public entry points are:
+
+- `processRawCsv(csvText: string)` for programmatic use with already-loaded CSV content.
+- `runPipeline(csvPath: string)` for file-based use.
+
+## How To Use
+
+Typical file-based usage:
+
+```typescript
+import { runPipeline } from "./src/services/data-pipeline.js";
+
+const result = await runPipeline("./data/incoming_patient_data.csv");
+
+console.log(result.clean);
+console.log(result.quarantined);
+console.log(result.summary);
+```
+
+Return shape:
+
+- `clean`: validated `PatientRecord[]`
+- `quarantined`: raw source rows plus reason codes
+- `summary`: total input, clean, quarantined, dropped, and issue counts
+
 ## Issue Categories
 
 ### Mixed date formats
