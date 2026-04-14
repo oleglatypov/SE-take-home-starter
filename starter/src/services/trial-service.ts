@@ -39,8 +39,9 @@ export function listTrials(filters: TrialFilters): {
     results = results.filter((t) => t.status === filters.status);
   }
 
-  if (filters.minEnrollment) {
-    results = results.filter((t) => t.enrollment >= filters.minEnrollment!);
+  if (filters.minEnrollment !== undefined) {
+    const minEnrollment = filters.minEnrollment;
+    results = results.filter((t) => t.enrollment >= minEnrollment);
   }
 
   if (filters.sponsor) {

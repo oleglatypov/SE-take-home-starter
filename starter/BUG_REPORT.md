@@ -295,3 +295,65 @@ The shared `sortOrder === "asc" ? cmp : -cmp` logic only works if every sortable
 1. **Flip the ternary at the bottom** — this would fix `startDate` but break `enrollment` and `adverseEventRate`.
 2. **Special-case `startDate` in the ternary** — this works, but leaves the comparator inconsistent and harder to maintain.
 3. **Normalize the `startDate` comparator to the same base direction** (chosen) — smallest root-cause fix, with no unrelated behavior changes.
+
+---
+
+## Bug 7: `minEnrollment` invalid and falsy values were silently ignored
+
+### Description
+
+The `minEnrollment` filter had two distinct failure modes.
+
+At the route layer, the query parameter was parsed with `Number(minEnrollment)` and passed into `listTrials` without validation. That meant a request like `?minEnrollment=abc` produced `NaN`.
+
+At the service layer, the filter was only applied when `filters.minEnrollment` was truthy:
+
+```typescript
+if (filters.minEnrollment) {
+  results = results.filter((t) => t.enrollment >= filters.minEnrollment!);
+}
+```
+
+Because both `NaN` and `0` are falsy, malformed input and valid zero-valued input were both silently treated as if the filter were absent.
+
+I discovered this by tracing the list route and then confirming it over HTTP: `GET /trials?minEnrollment=abc` returned `200` with the full result set instead of rejecting the input.
+
+### Real-World Impact
+
+Clients could believe they had applied an enrollment filter when the API had actually ignored it. In production, that leads to misleading query results and makes client-side input mistakes hard to diagnose because the request still succeeds.
+
+### Fix
+
+**Files:** `starter/src/routes/trials.ts` and `starter/src/services/trial-service.ts`
+
+At the route boundary, parse and validate the query parameter before calling `listTrials`:
+
+```typescript
+const parsedMinEnrollment =
+  minEnrollment === undefined ? undefined : Number(minEnrollment);
+
+if (parsedMinEnrollment !== undefined && !Number.isFinite(parsedMinEnrollment)) {
+  res.status(400).json({ error: "Invalid minEnrollment" });
+  return;
+}
+```
+
+At the service layer, distinguish `undefined` from valid falsy numbers:
+
+```typescript
+if (filters.minEnrollment !== undefined) {
+  results = results.filter((t) => t.enrollment >= filters.minEnrollment);
+}
+```
+
+I also added a route-level regression test in `starter/src/__tests__/server.test.ts` for non-numeric input and a service-level regression test in `starter/src/__tests__/trials.test.ts` for `minEnrollment: 0`.
+
+### Why This Fix Is Correct
+
+The route now rejects malformed numeric input at the API boundary, and the service no longer conflates `undefined`, `NaN`, and `0`. That preserves the intended meaning of the filter and aligns runtime behavior with client expectations.
+
+### Alternatives Considered
+
+1. **Fix only the service truthiness check** — this would still leave malformed query input unvalidated at the boundary.
+2. **Silently coerce invalid numbers to `undefined`** — this preserves the misleading success behavior instead of surfacing the client error.
+3. **Validate at the route boundary and use an explicit `undefined` check in the service** (chosen) — minimal, correct, and fixes both failure modes.

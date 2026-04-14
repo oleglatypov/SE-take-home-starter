@@ -41,4 +41,10 @@ describe("server", () => {
 
     expect(response.status).toBe(400);
   });
+
+  it("returns 400 for non-numeric minEnrollment", async () => {
+    const response = await request(app).get("/trials?minEnrollment=abc");
+
+    expect(response.status).toBe(400);
+  });
 });
