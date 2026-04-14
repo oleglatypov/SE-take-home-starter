@@ -62,12 +62,18 @@ export async function streamAnalysis(
 
   const reader = result.textStream;
 
-  for await (const chunk of reader) {
-    response.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
-  }
+  try {
+    for await (const chunk of reader) {
+      response.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+    }
 
-  response.write("data: [DONE]\n\n");
-  response.end();
+    response.write("data: [DONE]\n\n");
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Stream error";
+    response.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+  } finally {
+    response.end();
+  }
 }
 
 export function getTrialSummary(trial: ClinicalTrial): {
