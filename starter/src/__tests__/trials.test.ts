@@ -67,6 +67,26 @@ describe("trial-service", () => {
         expect(enrollments[i]! >= enrollments[i - 1]!).toBe(true);
       }
     });
+
+    describe("search", () => {
+      it("matches terms inside keyFindings sentences", () => {
+        const result = listTrials({ search: "fatigue" });
+        expect(result.trials.length).toBeGreaterThan(0);
+        expect(result.trials.some((t) => t.id === "NCT-001")).toBe(true);
+      });
+
+      it("ranks results by relevance when no explicit sort is given", () => {
+        const result = listTrials({ search: "biliary" });
+        expect(result.trials.length).toBeGreaterThan(1);
+        expect(result.trials[0]!.id).toBe("NCT-008");
+      });
+
+      it("does not attach _score to cached trial objects", () => {
+        listTrials({ search: "prostate" });
+        const trial = getTrialById("NCT-001");
+        expect(trial).not.toHaveProperty("_score");
+      });
+    });
   });
 });
 
