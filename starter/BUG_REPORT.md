@@ -411,3 +411,67 @@ The accepted values for `sort` and `order` are part of the API contract, so vali
 1. **Leave the current fallback behavior in place** — this preserves the bug by silently accepting invalid client input.
 2. **Throw from `listTrials` on invalid values** — workable, but request validation belongs at the boundary rather than inside the query function.
 3. **Validate with route-level allowlists** (chosen) — minimal, explicit, and consistent with the other input-validation fixes.
+
+---
+
+## Bug 9: Search had broken matching, unused relevance scoring, and shared-state mutation
+
+### Description
+
+The search path in `listTrials` had three related bugs in the same block.
+
+First, it used `t.keyFindings.includes(query)`, which checks exact array-element equality rather than substring containment. Because `keyFindings` entries are full sentences, normal search terms inside those sentences never matched.
+
+Second, it computed a relevance score but never used that score for default ordering. After the search filter ran, execution always fell through to the generic sort block, which defaulted to sorting by `startDate` rather than relevance.
+
+Third, it stored the score by mutating the shared trial objects with `(t as any)._score = score`. Since `results = [...trialData]` only clones the array and not the trial objects themselves, that mutation leaked into `trialData` and `trialCache`, causing later responses to expose an undocumented `_score` property.
+
+I discovered this by tracing the `if (filters.search)` block, then confirming the effects over HTTP and by inspecting returned trial objects after search requests.
+
+### Real-World Impact
+
+In production, search would miss valid matches found inside `keyFindings`, return date-ordered results instead of relevance-ordered results, and leak internal scoring state into unrelated API responses. That is both a search-quality bug and a data-integrity bug.
+
+### Fix
+
+**File:** `starter/src/services/trial-service.ts`, search block in `listTrials`
+
+Replace the shared-object mutation and broken exact-match logic with request-scoped scoring:
+
+```typescript
+if (filters.search) {
+  const query = filters.search.toLowerCase();
+  const scores = new Map<string, number>();
+
+  results = results.filter((t) => {
+    let score = 0;
+    if (t.name.toLowerCase().includes(query)) score += 3;
+    if (t.indication.toLowerCase().includes(query)) score += 2;
+    if (t.primaryEndpoint.toLowerCase().includes(query)) score += 1;
+    if (t.keyFindings.some((finding) => finding.toLowerCase().includes(query))) {
+      score += 2;
+    }
+    if (score > 0) {
+      scores.set(t.id, score);
+    }
+    return score > 0;
+  });
+
+  if (!filters.sort) {
+    results.sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0));
+    return { trials: results, total: results.length };
+  }
+}
+```
+
+I also added three regression tests in `starter/src/__tests__/trials.test.ts` covering sentence-level `keyFindings` matching, relevance ordering, and the absence of leaked `_score` properties on cached trial objects.
+
+### Why This Fix Is Correct
+
+It fixes the matching logic, keeps relevance scores scoped to the request, and applies relevance ordering only when the caller did not explicitly request another sort field. That preserves the current API shape while making the search path internally consistent.
+
+### Alternatives Considered
+
+1. **Keep storing `_score` on the trial objects** — this preserves cross-request mutation and leaks internal state.
+2. **Always sort by relevance even when `sort` is provided** — this would override explicit caller intent.
+3. **Use a request-scoped score map and early-return only for default search ordering** (chosen) — minimal, correct, and fixes all three bugs together.
