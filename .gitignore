@@ -3,7 +3,6 @@ dist/
 .env
 *.tgz
 .DS_Store
-PLAN-1.md
-PLAN-2.md
-PLAN.md
+ADR.md
+logs/
 
