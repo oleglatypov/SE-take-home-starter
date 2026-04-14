@@ -357,3 +357,57 @@ The route now rejects malformed numeric input at the API boundary, and the servi
 1. **Fix only the service truthiness check** — this would still leave malformed query input unvalidated at the boundary.
 2. **Silently coerce invalid numbers to `undefined`** — this preserves the misleading success behavior instead of surfacing the client error.
 3. **Validate at the route boundary and use an explicit `undefined` check in the service** (chosen) — minimal, correct, and fixes both failure modes.
+
+---
+
+## Bug 8: Invalid `sort` and `order` values were silently accepted
+
+### Description
+
+The list route accepted arbitrary `sort` and `order` query parameter values and passed them directly into `listTrials`.
+
+That produced two silent failure modes:
+
+- unknown `sort` values fell into the comparator `default` case, which set `cmp = 0`
+- unknown `order` values fell through the shared ternary and behaved as descending
+
+In both cases the API returned `200` with no indication that the provided parameters were invalid or ignored.
+
+I discovered this by tracing the list route and then confirming it over HTTP: `GET /trials?sort=bogus&order=sideways` returned `200` instead of a client error.
+
+### Real-World Impact
+
+Clients could send invalid sorting parameters and receive a successful response that did not match the requested contract. In production, that creates confusing behavior, makes client bugs harder to spot, and can lead consumers to trust an ordering the API did not actually apply.
+
+### Fix
+
+**File:** `starter/src/routes/trials.ts`
+
+Add route-level allowlists before calling `listTrials`:
+
+```typescript
+const VALID_SORT = ["enrollment", "startDate", "adverseEventRate"] as const;
+const VALID_ORDER = ["asc", "desc"] as const;
+
+if (sort !== undefined && !VALID_SORT.includes(sort as typeof VALID_SORT[number])) {
+  res.status(400).json({ error: "Invalid sort field" });
+  return;
+}
+
+if (order !== undefined && !VALID_ORDER.includes(order as typeof VALID_ORDER[number])) {
+  res.status(400).json({ error: "Invalid order value" });
+  return;
+}
+```
+
+I also added two route-level regression tests in `starter/src/__tests__/server.test.ts` covering invalid `sort` and invalid `order` values.
+
+### Why This Fix Is Correct
+
+The accepted values for `sort` and `order` are part of the API contract, so validating them at the route boundary is the correct place to reject malformed input. This prevents silent fallback behavior while keeping the service logic unchanged for valid requests.
+
+### Alternatives Considered
+
+1. **Leave the current fallback behavior in place** — this preserves the bug by silently accepting invalid client input.
+2. **Throw from `listTrials` on invalid values** — workable, but request validation belongs at the boundary rather than inside the query function.
+3. **Validate with route-level allowlists** (chosen) — minimal, explicit, and consistent with the other input-validation fixes.
