@@ -186,3 +186,58 @@ This moves unexpected error handling to the correct layer: the application bound
 1. **Wrap each route in local `try/catch`** — repetitive and easy to miss in future routes.
 2. **Use a constant error string** — stricter for production secrecy, but less useful during debugging. The chosen version still avoids stack traces and filesystem paths while preserving the error message.
 3. **Add one centralized error middleware** (chosen) — minimal, framework-native, and covers future route errors automatically.
+
+---
+
+## Bug 5: Invalid or missing `focus` is accepted by `/analyze`
+
+### Description
+
+The `/trials/:id/analyze` route read `req.body.focus` and passed it directly into `streamAnalysis` using `focus as any`, with no validation.
+
+That meant both of these invalid requests were accepted:
+
+```json
+{"focus":"bogus"}
+```
+
+and
+
+```json
+{}
+```
+
+I discovered this by tracing the analyze route and then confirming it over HTTP: both an invalid `focus` value and a missing `focus` field returned `200` instead of a client error.
+
+### Real-World Impact
+
+In production, this breaks the API contract and allows invalid request data into the AI analysis path. At best, clients get inconsistent behavior for bad inputs. At worst, malformed requests reach the model layer and produce meaningless output or confusing failures that should have been rejected immediately.
+
+### Fix
+
+**File:** `starter/src/routes/trials.ts`, lines 61–69
+
+Replace the direct destructuring and unsafe cast with guarded extraction and enum validation:
+
+```typescript
+const { focus } = req.body ?? {};
+
+if (focus !== "safety" && focus !== "efficacy" && focus !== "competitive") {
+  res.status(400).json({ error: "Invalid focus" });
+  return;
+}
+
+await streamAnalysis(trial, focus, res);
+```
+
+I also added two route-level regression tests in `starter/src/__tests__/server.test.ts` covering the invalid-focus and missing-focus cases.
+
+### Why This Fix Is Correct
+
+This enforces the runtime contract that was already implied by the `AnalysisFocus` type. It also safely handles cases where `req.body` is missing or undefined by falling back to `{}` before destructuring.
+
+### Alternatives Considered
+
+1. **Leave the `as any` cast in place** — this preserves the bug by bypassing the type system and accepting bad inputs.
+2. **Use a Zod schema** — more robust long-term, but larger than necessary for this focused fix.
+3. **Add a direct enum check in the route** (chosen) — minimal, explicit, and correct for the current codebase.

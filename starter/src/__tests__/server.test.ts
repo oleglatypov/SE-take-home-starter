@@ -25,4 +25,20 @@ describe("server", () => {
     expect(response.text).not.toContain("/Users/");
     expect(response.text).not.toContain("TypeError");
   });
+
+  it("returns 400 for invalid focus", async () => {
+    const response = await request(app)
+      .post("/trials/NCT-001/analyze")
+      .send({ focus: "bogus" });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 when focus is missing", async () => {
+    const response = await request(app)
+      .post("/trials/NCT-001/analyze")
+      .send({});
+
+    expect(response.status).toBe(400);
+  });
 });
