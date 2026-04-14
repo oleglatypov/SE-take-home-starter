@@ -8,6 +8,8 @@ import {
 import type { TrialListResponse, ErrorResponse } from "../types.js";
 
 const router = Router();
+const VALID_PHASE = ["I", "II", "III"] as const;
+const VALID_STATUS = ["recruiting", "completed", "terminated"] as const;
 const VALID_SORT = ["enrollment", "startDate", "adverseEventRate"] as const;
 const VALID_ORDER = ["asc", "desc"] as const;
 
@@ -15,10 +17,29 @@ router.get("/", (req: Request, res: Response<TrialListResponse | ErrorResponse>)
   const { phase, status, minEnrollment, sponsor, search, sort, order } =
     req.query;
 
+  if (
+    phase !== undefined &&
+    (typeof phase !== "string" || !VALID_PHASE.includes(phase as typeof VALID_PHASE[number]))
+  ) {
+    res.status(400).json({ error: "Invalid phase" });
+    return;
+  }
+
+  if (
+    status !== undefined &&
+    (typeof status !== "string" || !VALID_STATUS.includes(status as typeof VALID_STATUS[number]))
+  ) {
+    res.status(400).json({ error: "Invalid status" });
+    return;
+  }
+
   const parsedMinEnrollment =
     minEnrollment === undefined ? undefined : Number(minEnrollment);
 
-  if (parsedMinEnrollment !== undefined && !Number.isFinite(parsedMinEnrollment)) {
+  if (
+    parsedMinEnrollment !== undefined &&
+    (!Number.isFinite(parsedMinEnrollment) || parsedMinEnrollment < 0)
+  ) {
     res.status(400).json({ error: "Invalid minEnrollment" });
     return;
   }
@@ -30,6 +51,16 @@ router.get("/", (req: Request, res: Response<TrialListResponse | ErrorResponse>)
 
   if (order !== undefined && !VALID_ORDER.includes(order as typeof VALID_ORDER[number])) {
     res.status(400).json({ error: "Invalid order value" });
+    return;
+  }
+
+  if (sponsor !== undefined && typeof sponsor !== "string") {
+    res.status(400).json({ error: "Invalid sponsor" });
+    return;
+  }
+
+  if (search !== undefined && typeof search !== "string") {
+    res.status(400).json({ error: "Invalid search" });
     return;
   }
 
@@ -86,7 +117,10 @@ router.post(
     }
 
     try {
-      await streamAnalysis(trial, focus, res);
+      const controller = new AbortController();
+      req.once("close", () => controller.abort());
+
+      await streamAnalysis(trial, focus, res, controller.signal);
     } catch (err) {
       if (!res.headersSent) {
         res.status(500).json({

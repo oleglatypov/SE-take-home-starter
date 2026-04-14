@@ -580,3 +580,432 @@ Low response rate is a plausible negative efficacy signal, while high response r
 1. **Remove the response-rate component entirely** — simpler, but throws away a legitimate efficacy signal.
 2. **Keep penalizing high response rate** — clinically backwards and inconsistent with the rest of the score semantics.
 3. **Penalize clearly poor response rate instead** (chosen) — minimal, defensible, and aligned with the intended meaning of risk.
+
+---
+
+## Bug 12: Array-valued `sponsor` and `search` query parameters crash the server
+
+### Description
+
+Express parses a query string like `?sponsor=A&sponsor=B` as `{ sponsor: ["A", "B"] }` — a `string[]` rather than a `string`. The list route destructured `sponsor` and `search` and cast them with `as string | undefined`:
+
+```typescript
+sponsor: sponsor as string | undefined,
+search:  search  as string | undefined,
+```
+
+TypeScript's `as` cast is a compile-time assertion only; it does not narrow the runtime value. When either parameter was actually an array, the service called `.toLowerCase()` on it and threw:
+
+```
+TypeError: sponsor.toLowerCase is not a function
+```
+
+This produced a `500` instead of a `400`, even though the fault lay entirely with the client's request. The other parameters were already safe: `minEnrollment` is parsed through `Number()` with `isFinite` guard; `sort` and `order` fail the allowlist check and return `400`; `phase` and `status` fall through to equality comparisons that simply return no results.
+
+I discovered this by auditing the route handler for parameters that consumed string methods downstream without a prior type guard.
+
+### Real-World Impact
+
+Any client or attacker that sends duplicate query parameters causes the API to crash with a `500` instead of receiving a proper `400`. Beyond the broken error contract, this is an easy denial-of-service surface: a single repeated query key is enough to crash a request handler. It also masks real client-side bugs because the error message reveals nothing about what was wrong with the input.
+
+### Fix
+
+**File:** `starter/src/routes/trials.ts`
+
+Add `typeof` guards for both parameters after the existing `order` validation and before the `listTrials` call:
+
+```typescript
+if (sponsor !== undefined && typeof sponsor !== "string") {
+  res.status(400).json({ error: "Invalid sponsor" });
+  return;
+}
+
+if (search !== undefined && typeof search !== "string") {
+  res.status(400).json({ error: "Invalid search" });
+  return;
+}
+```
+
+The downstream `as string | undefined` casts are now safe because the guards have already narrowed the values at runtime.
+
+I also added two route-level regression tests in `starter/src/__tests__/server.test.ts` covering the array-valued `sponsor` and `search` cases.
+
+### Why This Fix Is Correct
+
+The root cause is a missing runtime type guard at the API boundary. Adding `typeof` checks is the minimal, inline fix that matches the validation pattern already established by `minEnrollment`, `sort`, and `order`. It rejects malformed input at the boundary, returns a clear `400`, and leaves the service layer untouched.
+
+### Alternatives Considered
+
+1. **Normalize arrays to their first element** — silently accepts parameter pollution and may confuse clients whose duplicate parameters were a mistake.
+2. **Use a validation library (e.g. Zod)** — more robust long-term, but over-engineered for this single fix and inconsistent with the existing inline pattern.
+3. **Add inline `typeof` guards at the route boundary** (chosen) — minimal, explicit, consistent with existing validation style, and fixes the problem at the correct layer.
+
+---
+
+## Bug 13: Synchronous `streamText()` failure leaves SSE response permanently stalled
+
+### Description
+
+`streamAnalysis` committed the SSE response headers before entering the guarded stream loop, but only the `for await` loop itself was inside `try/catch/finally`:
+
+```typescript
+response.writeHead(200, { ... });  // headers committed here
+
+const result = streamText({        // outside try — any throw escapes
+  model: openai("gpt-4o-mini"),
+  prompt,
+});
+
+const reader = result.textStream;  // also outside try
+
+try {
+  for await (const chunk of reader) { ... }
+} catch (err) {
+  response.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+} finally {
+  response.end();                  // never reached if streamText() threw
+}
+```
+
+If `openai(...)` or `streamText(...)` threw synchronously — for example due to a missing API key environment variable, an invalid model identifier, or SDK initialization failure — the exception propagated directly to the route catch block in `trials.ts`. There, `res.headersSent` was already `true`, so the `if (!res.headersSent)` guard suppressed the JSON error response and `response.end()` was never called. The client was left with a permanently open, stalled SSE connection.
+
+I discovered this by auditing the scope boundary of the `try` block relative to the `writeHead` call.
+
+### Real-World Impact
+
+Any synchronous failure in the AI SDK initialization path — missing `OPENAI_API_KEY`, invalid model string, SDK misconfiguration — would produce a hung SSE connection rather than a recoverable error. The client has no way to distinguish a stalled stream from a slow one, making this failure mode silent and difficult to diagnose. In production, this would result in clients blocking indefinitely with no structured error event and no connection close signal.
+
+### Fix
+
+**File:** `starter/src/services/analysis-service.ts`
+
+Move `streamText(...)` and `result.textStream` inside the existing `try` block so that `finally { response.end() }` is always reached regardless of where the failure originates:
+
+```typescript
+response.writeHead(200, { ... });
+
+try {
+  const result = streamText({
+    model: openai("gpt-4o-mini"),
+    prompt,
+  });
+
+  const reader = result.textStream;
+
+  for await (const chunk of reader) {
+    response.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+  }
+
+  response.write("data: [DONE]\n\n");
+} catch (err) {
+  const message = err instanceof Error ? err.message : "Stream error";
+  response.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+} finally {
+  response.end();
+}
+```
+
+### Why This Fix Is Correct
+
+Once SSE headers are committed, the response body is the only channel available to signal errors or close the connection. Wrapping the entire AI SDK call sequence in a single `try/catch/finally` ensures `response.end()` is always called and any failure — whether synchronous or mid-stream — is surfaced as a structured in-band error event before the connection closes.
+
+### Alternatives Considered
+
+1. **Wrap only the `streamText()` call in a separate try and re-throw** — adds complexity without benefit; the existing `catch` already handles all error types.
+2. **Check `res.headersSent` in the route catch and call `res.end()`** — treats the symptom at the wrong layer; the route handler should not need to know about SSE lifecycle internals.
+3. **Expand the `try` scope to include `streamText()` and `result.textStream`** (chosen) — one-line scope change, no behavioral change for the happy path, and closes the stall gap entirely.
+
+---
+
+## Bug 14: Array-valued `phase` and `status` query parameters silently return empty results
+
+### Description
+
+Like `sponsor` and `search` (Bug 12), the `phase` and `status` query parameters were passed to `listTrials` with `as string | undefined` casts and no runtime type guard. When a client sent duplicate parameters — `?phase=III&phase=II` or `?status=recruiting&status=completed` — Express set the value to a `string[]`.
+
+Unlike `sponsor` and `search`, these parameters do not call string methods on the value, so there was no crash. Instead, the array values failed the strict equality checks in the service:
+
+```typescript
+results = results.filter((t) => t.phase === filters.phase);   // ["III","II"] never equals a string
+results = results.filter((t) => t.status === filters.status); // same
+```
+
+Both requests returned `200 {"trials":[],"total":0}` — a successful, plausible-looking response that silently discarded the filter entirely. I verified this in-process with `GET /trials?phase=III&phase=II` and `GET /trials?status=recruiting&status=completed`. The asymmetry was also observable against the already-fixed `sponsor` and `search` parameters, which returned 400 for the same class of input.
+
+### Real-World Impact
+
+Clients that accidentally or deliberately repeat these query parameters receive an empty result set with no indication that their input was malformed. A UI querying for active Phase III trials and getting an empty list — with a `200` status — would silently show no data rather than surfacing an error. This is the same parameter-pollution surface as Bug 12, just with a quieter failure mode that is harder to detect.
+
+### Fix
+
+**File:** `starter/src/routes/trials.ts`
+
+Add `typeof` guards for `phase` and `status` before the `minEnrollment` parsing, following the same pattern as Bug 12:
+
+```typescript
+if (phase !== undefined && typeof phase !== "string") {
+  res.status(400).json({ error: "Invalid phase" });
+  return;
+}
+
+if (status !== undefined && typeof status !== "string") {
+  res.status(400).json({ error: "Invalid status" });
+  return;
+}
+```
+
+I also added two route-level regression tests in `starter/src/__tests__/server.test.ts` covering the array-valued `phase` and `status` cases.
+
+### Why This Fix Is Correct
+
+All six string query parameters on this route (`phase`, `status`, `minEnrollment`, `sponsor`, `search`, `sort`, `order`) now reject non-string values at the API boundary and return a consistent `400`. This closes the asymmetry introduced by Bug 12 and makes the route's validation behavior uniform across all parameters.
+
+### Alternatives Considered
+
+1. **Normalize arrays to their first element** — silently accepts parameter pollution; masks client-side mistakes rather than surfacing them.
+2. **Validate inside `listTrials`** — wrong layer; request shape validation belongs at the route boundary, not inside the query function.
+3. **Add inline `typeof` guards at the route boundary** (chosen) — identical to the Bug 12 fix, minimal, and makes the validation contract consistent across all parameters.
+
+---
+
+## Bug 15: SSE writer ignores backpressure, causing unbounded memory buffering under slow clients
+
+### Description
+
+In Node.js, `writable.write(chunk)` returns `false` when the socket's internal buffer has reached its high-water mark, signalling that the caller should stop writing and wait for the `drain` event before continuing. The streaming loop in `streamAnalysis` called `response.write()` on every LLM chunk without checking the return value:
+
+```typescript
+for await (const chunk of reader) {
+  response.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+}
+```
+
+Node does not drop buffered writes — data is still delivered — but it will keep accepting chunks into memory regardless of how fast the client is consuming them. Under a slow client (e.g. a mobile browser on a poor connection, or a client deliberately reading slowly), every concurrent analysis stream accumulates its entire remaining output in the process heap until the socket drains or the connection closes.
+
+Additionally, the `response` interface parameter did not declare `once`, which meant the backpressure pattern could not be implemented without a type change, and type-checking gave no signal that the omission existed.
+
+I discovered this by auditing the streaming loop for ignored return values and comparing the interface against Node's `Writable` contract.
+
+### Real-World Impact
+
+Under normal load the individual chunk sizes are small (single tokens from the LLM) and a single analysis is bounded to a few kilobytes, so the issue is latent rather than immediately destructive. Under concurrent streams with slow clients — a realistic production scenario for an analytics product used in a browser — memory grows linearly with the number of stalled streams and the size of each model response. At sufficient concurrency this causes GC pressure, increased latency for all requests, and eventually OOM crashes. It is also an easy target for a slow-loris style resource exhaustion: open many analysis streams and read from them slowly.
+
+### Fix
+
+**File:** `starter/src/services/analysis-service.ts`
+
+Add `once` to the response interface and pause iteration when `write()` signals backpressure:
+
+```typescript
+response: {
+  writeHead: (status: number, headers: Record<string, string>) => void;
+  write: (chunk: string) => boolean;
+  once: (event: "drain", listener: () => void) => void;
+  end: () => void;
+}
+```
+
+```typescript
+for await (const chunk of reader) {
+  const ok = response.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+  if (!ok) await new Promise<void>((resolve) => response.once("drain", resolve));
+}
+```
+
+The `once` method on the real `http.ServerResponse` fires when the socket buffer has emptied, resuming the loop at the correct time with no data loss.
+
+I also updated the existing test mock to satisfy the interface (adding a no-op `once` — it is never called because the mock's `write` always returns `true`) and added a dedicated regression test that simulates a backpressured first write, verifies `once("drain", ...)` is called, and immediately resolves it so the loop can complete.
+
+### Why This Fix Is Correct
+
+Respecting the `write()` return value is the standard Node.js backpressure contract for writable streams. Awaiting `drain` before the next iteration pauses the `for await` loop without blocking the event loop, preserving Node's cooperative multitasking model. No data is lost and the happy path (client keeping up) is completely unaffected.
+
+### Alternatives Considered
+
+1. **Ignore the return value** — current behavior; correct for data delivery but unbounded for memory.
+2. **Use `pipeline()` or `stream.pipeline`** — the correct long-term solution for pipeline backpressure, but requires restructuring the SSE response as a readable stream, which is a larger change than warranted here.
+3. **Await `drain` inline when `write()` returns `false`** (chosen) — minimal, idiomatic, and slots directly into the existing `for await` loop without restructuring anything.
+
+---
+
+## Bug 16: `phase` and `status` accepted invalid enum values and silently returned empty results
+
+### Description
+
+The list route already rejected array-valued `phase` and `status` query parameters, but it only checked that the values were strings. That meant invalid enum strings like `GET /trials?phase=IV` and `GET /trials?status=active` passed the route layer, flowed into `listTrials`, and returned `200 {"trials":[],"total":0}`.
+
+This was a real API-contract bug: the domain model only allows `"I" | "II" | "III"` for phase and `"recruiting" | "completed" | "terminated"` for status, but the API accepted arbitrary strings.
+
+### Real-World Impact
+
+Clients with typos or stale enum values saw a successful empty result set instead of a validation error. In production this is misleading because it makes bad input indistinguishable from a legitimate “no matches” response.
+
+### Fix
+
+**File:** `starter/src/routes/trials.ts`, lines 11–14 and 20–33
+
+Add allowlists at the route boundary and reject any string that falls outside the supported enums:
+
+```typescript
+const VALID_PHASE = ["I", "II", "III"] as const;
+const VALID_STATUS = ["recruiting", "completed", "terminated"] as const;
+
+if (
+  phase !== undefined &&
+  (typeof phase !== "string" || !VALID_PHASE.includes(phase as typeof VALID_PHASE[number]))
+) {
+  res.status(400).json({ error: "Invalid phase" });
+  return;
+}
+
+if (
+  status !== undefined &&
+  (typeof status !== "string" || !VALID_STATUS.includes(status as typeof VALID_STATUS[number]))
+) {
+  res.status(400).json({ error: "Invalid status" });
+  return;
+}
+```
+
+I also added regression coverage in `starter/src/__tests__/server.test.ts`, lines 87–103, and updated `starter/src/__tests__/audit.test.ts` to assert the corrected behavior.
+
+### Why This Fix Is Correct
+
+The route boundary is the right place to reject malformed client input. This makes runtime behavior consistent with the literal union types already declared in `types.ts` and prevents silent fallback to an empty result set.
+
+### Alternatives Considered
+
+1. **Keep returning empty `200` responses for unknown values** — masks client mistakes and violates the typed contract.
+2. **Validate inside `listTrials`** — possible, but request-shape validation belongs at the route boundary.
+3. **Add route-level allowlists** (chosen) — minimal, explicit, and consistent with the existing `sort`/`order` validation pattern.
+
+---
+
+## Bug 17: Negative `minEnrollment` values were accepted and behaved like no filter
+
+### Description
+
+The route already parsed `minEnrollment` with `Number(...)` and rejected non-finite values like `abc`, but it still accepted negative numbers. A request such as `GET /trials?minEnrollment=-100` passed validation and effectively behaved like no filter because all seeded trials have enrollment counts greater than or equal to zero.
+
+I intentionally did **not** treat float values like `100.5` as part of this bug. That is a product decision rather than a clear runtime defect in the current API contract.
+
+### Real-World Impact
+
+Clients could send a negative enrollment filter and receive the full dataset with a `200`, which is misleading. The request appears valid and filtered even though it is semantically nonsensical.
+
+### Fix
+
+**File:** `starter/src/routes/trials.ts`, lines 36–44
+
+Tighten the existing numeric validation so negative values are rejected at the route boundary:
+
+```typescript
+const parsedMinEnrollment =
+  minEnrollment === undefined ? undefined : Number(minEnrollment);
+
+if (
+  parsedMinEnrollment !== undefined &&
+  (!Number.isFinite(parsedMinEnrollment) || parsedMinEnrollment < 0)
+) {
+  res.status(400).json({ error: "Invalid minEnrollment" });
+  return;
+}
+```
+
+I also added a route-level regression test in `starter/src/__tests__/server.test.ts`, lines 99–103, and updated `starter/src/__tests__/audit.test.ts` to assert the fixed behavior for negative input.
+
+### Why This Fix Is Correct
+
+Negative enrollment thresholds are never meaningful for this dataset. Rejecting them at the boundary prevents a misleading successful response while preserving the existing accepted behavior for non-negative numeric input.
+
+### Alternatives Considered
+
+1. **Leave negative values accepted** — technically predictable, but misleading because the query appears filtered when it is not.
+2. **Also reject floats** — defensible, but more of a product/contract decision than a clear bug in the current implementation.
+3. **Reject only negative values** (chosen) — minimal, clearly justified, and aligned with the actual bug we observed.
+
+---
+
+## Reclassified Note 18: SSE reverse-proxy buffering depends on deployment topology
+
+The missing `X-Accel-Buffering: no` header is a valid production hardening improvement when the service is deployed behind Nginx or another buffering reverse proxy, but it is not an unconditional application bug in the current local/runtime environment.
+
+I left this documented in `starter/src/__tests__/audit.test.ts` as a deployment note rather than counting it as a functional bug.
+
+---
+
+## Reclassified Note 19: Authentication and rate limiting are product hardening requirements
+
+The API is intentionally unauthenticated today. That is a real production concern, especially because `/trials/:id/analyze` proxies to a paid LLM, but it is a product/infrastructure requirement rather than a defect in the current implementation.
+
+I reclassified this from “bug” to “hardening note” and left the current behavior documented in `starter/src/__tests__/audit.test.ts`.
+
+---
+
+## Reclassified Note 20: CORS policy is an integration concern, not a server defect
+
+The server currently does not configure CORS headers. That matters if this API is meant to be called directly from a separate browser origin, but it is not an intrinsic bug in the backend itself.
+
+I reclassified this from “bug” to “hardening note” and left the current behavior documented in `starter/src/__tests__/audit.test.ts`.
+
+---
+
+## Bug 21: Missing client-disconnect abort allowed abandoned analysis streams to keep consuming LLM work
+
+### Description
+
+The analysis route started a streaming OpenAI call but did not tie that upstream request to the lifetime of the HTTP client connection. If the client disconnected mid-stream, the server could continue consuming model output and tokens even though no one was still listening.
+
+### Real-World Impact
+
+In production, abandoned analysis streams waste paid LLM capacity and can contribute to unnecessary rate-limit pressure. This is especially relevant for browser clients that navigate away, reload, or drop network connectivity during an SSE response.
+
+### Fix
+
+**Files:** `starter/src/routes/trials.ts`, lines 119–123; `starter/src/services/analysis-service.ts`, lines 41–81
+
+Thread an `AbortSignal` from the request lifecycle into `streamText(...)` and suppress the in-band error write when the signal was intentionally aborted:
+
+```typescript
+const controller = new AbortController();
+req.once("close", () => controller.abort());
+
+await streamAnalysis(trial, focus, res, controller.signal);
+```
+
+```typescript
+export async function streamAnalysis(
+  trial: ClinicalTrial,
+  focus: AnalysisFocus,
+  response: { ... },
+  signal?: AbortSignal
+): Promise<void> {
+  const result = streamText({
+    model: openai("gpt-4o-mini"),
+    prompt,
+    ...(signal ? { abortSignal: signal } : {}),
+  });
+
+  ...
+
+  } catch (err) {
+    if (!signal?.aborted) {
+      response.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+    }
+  } finally {
+    response.end();
+  }
+}
+```
+
+I added regression coverage in `starter/src/__tests__/analysis-service.test.ts`, lines 185–210, proving that the signal is forwarded to `streamText(...)`, the stream still ends cleanly, and no spurious SSE error event is written on an intentional abort.
+
+### Why This Fix Is Correct
+
+This ties the upstream LLM request lifetime to the downstream HTTP connection lifetime. Once the client disconnects, the server aborts the model request instead of continuing work that can no longer be delivered.
+
+### Alternatives Considered
+
+1. **Ignore disconnects** — simplest, but wastes tokens and quota.
+2. **Poll writable state inside the loop** — detects symptoms later and does not stop the upstream model request.
+3. **Use `AbortController` on `req.close` and pass the signal through** (chosen) — minimal, explicit, and stops the wasted upstream work at the correct layer.

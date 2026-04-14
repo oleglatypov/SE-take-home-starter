@@ -59,4 +59,46 @@ describe("server", () => {
 
     expect(response.status).toBe(400);
   });
+
+  it("returns 400 when sponsor is an array", async () => {
+    const response = await request(app).get("/trials?sponsor=A&sponsor=B");
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 when search is an array", async () => {
+    const response = await request(app).get("/trials?search=foo&search=bar");
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 when phase is an array", async () => {
+    const response = await request(app).get("/trials?phase=III&phase=II");
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 when status is an array", async () => {
+    const response = await request(app).get("/trials?status=recruiting&status=completed");
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 for invalid phase value", async () => {
+    const response = await request(app).get("/trials?phase=IV");
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 for invalid status value", async () => {
+    const response = await request(app).get("/trials?status=active");
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 for negative minEnrollment", async () => {
+    const response = await request(app).get("/trials?minEnrollment=-100");
+
+    expect(response.status).toBe(400);
+  });
 });
