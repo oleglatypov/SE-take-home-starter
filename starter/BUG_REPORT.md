@@ -144,3 +144,45 @@ The fix preserves the existing behavior for trials that do have a numeric respon
 1. **Default to `0%`** — incorrect clinically, because `0%` is a measured result, not an unknown value.
 2. **Omit the sentence entirely** — avoids the crash but hides that the field is intentionally unavailable.
 3. **Use an explicit null-safe string branch** (chosen) — minimal, accurate, and keeps the summary structure stable.
+
+---
+
+## Bug 4: Unhandled route errors leak stack traces and filesystem paths
+
+### Description
+
+The Express app had no centralized error middleware. When a route threw unexpectedly, Express fell back to its default development error handler and returned an HTML response containing stack frames and absolute filesystem paths.
+
+I discovered this by hitting the summary endpoint with seeded data that triggered an exception and observing that the response body included a development stack trace with local paths under `/Users/oleglatypov/...` instead of a JSON API error payload.
+
+### Real-World Impact
+
+In production, this leaks internal implementation details to clients, including stack traces and local file paths. It also breaks the API contract by returning HTML from a JSON API, making client-side error handling inconsistent and exposing information that should stay internal.
+
+### Fix
+
+**File:** `starter/src/server.ts`, after the `/health` route
+
+Add centralized Express error middleware so unexpected route failures are normalized into JSON:
+
+```typescript
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const message = err instanceof Error ? err.message : "Internal server error";
+  if (res.headersSent) {
+    return;
+  }
+  res.status(500).json({ error: message });
+});
+```
+
+I also added a route-level regression test in `starter/src/__tests__/server.test.ts` using `supertest`, and added a small `VITEST` guard around `app.listen(...)` so the test can import `app` without binding a real port.
+
+### Why This Fix Is Correct
+
+This moves unexpected error handling to the correct layer: the application boundary. It prevents Express from falling back to its default HTML development handler and ensures the API always returns structured JSON for server failures, without leaking stack trace metadata.
+
+### Alternatives Considered
+
+1. **Wrap each route in local `try/catch`** — repetitive and easy to miss in future routes.
+2. **Use a constant error string** — stricter for production secrecy, but less useful during debugging. The chosen version still avoids stack traces and filesystem paths while preserving the error message.
+3. **Add one centralized error middleware** (chosen) — minimal, framework-native, and covers future route errors automatically.
