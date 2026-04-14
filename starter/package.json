@@ -10,6 +10,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck && vitest run",
+    "test:server": "vitest run src/__tests__/server.test.ts",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -21,6 +22,8 @@
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
+    "@types/supertest": "^7.2.0",
+    "supertest": "^7.2.2",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
