@@ -47,4 +47,16 @@ describe("server", () => {
 
     expect(response.status).toBe(400);
   });
+
+  it("returns 400 for invalid sort field", async () => {
+    const response = await request(app).get("/trials?sort=bogus");
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 for invalid order value", async () => {
+    const response = await request(app).get("/trials?order=sideways");
+
+    expect(response.status).toBe(400);
+  });
 });

@@ -8,6 +8,8 @@ import {
 import type { TrialListResponse, ErrorResponse } from "../types.js";
 
 const router = Router();
+const VALID_SORT = ["enrollment", "startDate", "adverseEventRate"] as const;
+const VALID_ORDER = ["asc", "desc"] as const;
 
 router.get("/", (req: Request, res: Response<TrialListResponse | ErrorResponse>) => {
   const { phase, status, minEnrollment, sponsor, search, sort, order } =
@@ -18,6 +20,16 @@ router.get("/", (req: Request, res: Response<TrialListResponse | ErrorResponse>)
 
   if (parsedMinEnrollment !== undefined && !Number.isFinite(parsedMinEnrollment)) {
     res.status(400).json({ error: "Invalid minEnrollment" });
+    return;
+  }
+
+  if (sort !== undefined && !VALID_SORT.includes(sort as typeof VALID_SORT[number])) {
+    res.status(400).json({ error: "Invalid sort field" });
+    return;
+  }
+
+  if (order !== undefined && !VALID_ORDER.includes(order as typeof VALID_ORDER[number])) {
+    res.status(400).json({ error: "Invalid order value" });
     return;
   }
 
