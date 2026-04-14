@@ -102,3 +102,45 @@ I also added compile-time regression coverage for this bug by introducing a type
 1. **Cast with `as string`** — quick but unsafe; suppresses the error without actually guaranteeing the type at runtime. If the value were ever an array, the bug would silently propagate.
 2. **Runtime `typeof` check with 400 response** — more defensive, catches genuine edge cases. Better for public-facing APIs or when middleware might transform params. Slightly more verbose.
 3. **Typed `Request` generic** (chosen) — the standard Express pattern. Zero runtime overhead, fully type-safe, and communicates intent clearly to other developers.
+
+---
+
+## Bug 3: Non-null assertion on `responseRate` crashes summary generation
+
+### Description
+
+`ClinicalTrial.responseRate` is typed as `number | null` in `types.ts`, but `getTrialSummary` in `analysis-service.ts` used a non-null assertion and called `.toFixed(1)` directly:
+
+```typescript
+`Current response rate: ${trial.responseRate!.toFixed(1)}%.`,
+```
+
+That silences TypeScript but does not make the value non-null at runtime. NCT-003 has `responseRate: null`, which is valid for a Phase I trial. Calling `getTrialSummary` for that trial throws `TypeError: Cannot read properties of null (reading 'toFixed')`.
+
+I discovered this by tracing the `GET /trials/:id/summary` path and then reproducing it with the seeded `NCT-003` trial data, which crashed both in direct execution and through the HTTP endpoint.
+
+### Real-World Impact
+
+Any request for a trial summary where the response rate is not yet available would fail with a `500` instead of returning a usable summary. In production, this would break summary views for early-stage trials and cause avoidable server errors on valid clinical data.
+
+### Fix
+
+**File:** `starter/src/services/analysis-service.ts`, line 84
+
+Replace the non-null assertion with an explicit null-safe branch:
+
+```typescript
+`Current response rate: ${trial.responseRate !== null ? trial.responseRate.toFixed(1) + "%" : "Not yet available"}.`,
+```
+
+I also added two regression tests in `starter/src/__tests__/trials.test.ts` covering the non-throwing behavior and the expected summary text when `responseRate` is `null`.
+
+### Why This Fix Is Correct
+
+The fix preserves the existing behavior for trials that do have a numeric response rate while handling the valid `null` case explicitly. It respects the actual domain model instead of asserting around it.
+
+### Alternatives Considered
+
+1. **Default to `0%`** — incorrect clinically, because `0%` is a measured result, not an unknown value.
+2. **Omit the sentence entirely** — avoids the crash but hides that the field is intentionally unavailable.
+3. **Use an explicit null-safe string branch** (chosen) — minimal, accurate, and keeps the summary structure stable.

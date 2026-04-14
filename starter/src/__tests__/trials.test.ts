@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { listTrials, getTrialById } from "../services/trial-service.js";
+import { getTrialSummary } from "../services/analysis-service.js";
 
 describe("trial-service", () => {
   describe("getTrialById", () => {
@@ -52,6 +53,20 @@ describe("trial-service", () => {
       for (let i = 1; i < enrollments.length; i++) {
         expect(enrollments[i]! >= enrollments[i - 1]!).toBe(true);
       }
+    });
+  });
+});
+
+describe("analysis-service", () => {
+  describe("getTrialSummary", () => {
+    it("does not throw for trials with null responseRate", () => {
+      const trial = getTrialById("NCT-003")!;
+      expect(() => getTrialSummary(trial)).not.toThrow();
+    });
+
+    it("includes 'Not yet available' when responseRate is null", () => {
+      const summary = getTrialSummary(getTrialById("NCT-003")!);
+      expect(summary.summary).toContain("Not yet available");
     });
   });
 });
