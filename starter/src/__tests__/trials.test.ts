@@ -39,11 +39,19 @@ describe("trial-service", () => {
       expect(result.trials.length).toBeGreaterThan(0);
     });
 
-    it("sorts by startDate", () => {
+    it("sorts by startDate descending by default", () => {
       const result = listTrials({ sort: "startDate" });
       const dates = result.trials.map((t) => new Date(t.startDate).getTime());
       for (let i = 1; i < dates.length; i++) {
         expect(dates[i]! <= dates[i - 1]!).toBe(true);
+      }
+    });
+
+    it("sorts by startDate ascending when order=asc", () => {
+      const result = listTrials({ sort: "startDate", order: "asc" });
+      const dates = result.trials.map((t) => new Date(t.startDate).getTime());
+      for (let i = 1; i < dates.length; i++) {
+        expect(dates[i]! >= dates[i - 1]!).toBe(true);
       }
     });
 
