@@ -52,15 +52,26 @@ export function listTrials(filters: TrialFilters): {
 
   if (filters.search) {
     const query = filters.search.toLowerCase();
+    const scores = new Map<string, number>();
+
     results = results.filter((t) => {
       let score = 0;
       if (t.name.toLowerCase().includes(query)) score += 3;
       if (t.indication.toLowerCase().includes(query)) score += 2;
       if (t.primaryEndpoint.toLowerCase().includes(query)) score += 1;
-      if (t.keyFindings.includes(query)) score += 2;
-      (t as any)._score = score;
+      if (t.keyFindings.some((finding) => finding.toLowerCase().includes(query))) {
+        score += 2;
+      }
+      if (score > 0) {
+        scores.set(t.id, score);
+      }
       return score > 0;
     });
+
+    if (!filters.sort) {
+      results.sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0));
+      return { trials: results, total: results.length };
+    }
   }
 
   const sortField = filters.sort ?? "startDate";
