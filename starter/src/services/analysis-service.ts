@@ -44,8 +44,10 @@ export async function streamAnalysis(
   response: {
     writeHead: (status: number, headers: Record<string, string>) => void;
     write: (chunk: string) => boolean;
+    once: (event: "drain", listener: () => void) => void;
     end: () => void;
-  }
+  },
+  signal?: AbortSignal
 ): Promise<void> {
   const prompt = buildPrompt(trial, focus);
 
@@ -55,22 +57,26 @@ export async function streamAnalysis(
     Connection: "keep-alive",
   });
 
-  const result = streamText({
-    model: openai("gpt-4o-mini"),
-    prompt,
-  });
-
-  const reader = result.textStream;
-
   try {
+    const result = streamText({
+      model: openai("gpt-4o-mini"),
+      prompt,
+      ...(signal ? { abortSignal: signal } : {}),
+    });
+
+    const reader = result.textStream;
+
     for await (const chunk of reader) {
-      response.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      const ok = response.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      if (!ok) await new Promise<void>((resolve) => response.once("drain", resolve));
     }
 
     response.write("data: [DONE]\n\n");
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Stream error";
-    response.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+    if (!signal?.aborted) {
+      const message = err instanceof Error ? err.message : "Stream error";
+      response.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+    }
   } finally {
     response.end();
   }
