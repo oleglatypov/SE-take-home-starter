@@ -241,3 +241,57 @@ This enforces the runtime contract that was already implied by the `AnalysisFocu
 1. **Leave the `as any` cast in place** — this preserves the bug by bypassing the type system and accepting bad inputs.
 2. **Use a Zod schema** — more robust long-term, but larger than necessary for this focused fix.
 3. **Add a direct enum check in the route** (chosen) — minimal, explicit, and correct for the current codebase.
+
+---
+
+## Bug 6: `startDate` sort direction was inverted relative to `order`
+
+### Description
+
+The `listTrials` comparator used the opposite base comparison for `startDate` than it used for the other sortable fields.
+
+`enrollment` and `adverseEventRate` both used `a - b`, which makes the base comparison ascending before the shared `sortOrder` logic is applied. But `startDate` used `b - a`:
+
+```typescript
+case "startDate":
+  cmp = new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+  break;
+```
+
+The comparator then returned:
+
+```typescript
+return sortOrder === "asc" ? cmp : -cmp;
+```
+
+That meant `startDate` was effectively inverted twice relative to the other fields: the default `order="desc"` returned ascending dates, and `order="asc"` returned descending dates.
+
+I discovered this from the existing failing test in `trials.test.ts`, then confirmed it by tracing the comparator logic and checking the live `/trials` response order.
+
+### Real-World Impact
+
+The default trial list order was wrong. Clients expecting newest-first trial data received oldest-first data instead. Because the other sort fields behaved correctly, this inconsistency was easy to miss and would lead to confusing UI behavior in production.
+
+### Fix
+
+**File:** `starter/src/services/trial-service.ts`, line 75
+
+Normalize `startDate` to the same ascending-base comparison used by the other sort fields:
+
+```typescript
+case "startDate":
+  cmp = new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+  break;
+```
+
+I also kept the existing default-order regression coverage and added a second test in `starter/src/__tests__/trials.test.ts` covering the explicit ascending case.
+
+### Why This Fix Is Correct
+
+The shared `sortOrder === "asc" ? cmp : -cmp` logic only works if every sortable field uses the same base sign convention. Changing `startDate` to `a - b` makes it consistent with `enrollment` and `adverseEventRate`, so the shared direction logic behaves correctly for all fields.
+
+### Alternatives Considered
+
+1. **Flip the ternary at the bottom** — this would fix `startDate` but break `enrollment` and `adverseEventRate`.
+2. **Special-case `startDate` in the ternary** — this works, but leaves the comparator inconsistent and harder to maintain.
+3. **Normalize the `startDate` comparator to the same base direction** (chosen) — smallest root-cause fix, with no unrelated behavior changes.
