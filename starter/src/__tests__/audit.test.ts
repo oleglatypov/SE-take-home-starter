@@ -82,7 +82,7 @@ describe("data integrity", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Section 3: Input validation bugs (documenting current behavior)
+// Section 3: Input validation behavior
 // ---------------------------------------------------------------------------
 
 describe("input validation gaps", () => {
@@ -101,7 +101,7 @@ describe("input validation gaps", () => {
     expect(response.status).toBe(400);
   });
 
-  it("current behavior: float minEnrollment remains accepted", async () => {
+  it("accepts float minEnrollment values", async () => {
     // This is intentionally left as a product decision rather than a bug fix.
     const response = await request(app).get("/trials?minEnrollment=100.5");
     expect(response.status).toBe(200);
@@ -341,7 +341,7 @@ describe("POST /trials/:id/analyze SSE format", () => {
     expect(response.text.endsWith("data: [DONE]\n\n")).toBe(true);
   });
 
-  it("deployment note: X-Accel-Buffering header is not set", async () => {
+  it("does not set the X-Accel-Buffering header", async () => {
     // Without this header, Nginx reverse proxies buffer the full stream before
     // forwarding it — silently breaking real-time delivery in any proxied deployment.
     const response = await request(app)

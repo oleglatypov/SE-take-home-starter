@@ -266,7 +266,7 @@ return sortOrder === "asc" ? cmp : -cmp;
 
 That meant `startDate` was effectively inverted twice relative to the other fields: the default `order="desc"` returned ascending dates, and `order="asc"` returned descending dates.
 
-I discovered this from the existing failing test in `trials.test.ts`, then confirmed it by tracing the comparator logic and checking the live `/trials` response order.
+I discovered this by checking the live `/trials` response order, then confirmed it by tracing the comparator logic and adding a regression test in `trials.test.ts`.
 
 ### Real-World Impact
 
