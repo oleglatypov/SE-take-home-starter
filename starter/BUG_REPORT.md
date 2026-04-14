@@ -475,3 +475,62 @@ It fixes the matching logic, keeps relevance scores scoped to the request, and a
 1. **Keep storing `_score` on the trial objects** — this preserves cross-request mutation and leaks internal state.
 2. **Always sort by relevance even when `sort` is provided** — this would override explicit caller intent.
 3. **Use a request-scoped score map and early-return only for default search ordering** (chosen) — minimal, correct, and fixes all three bugs together.
+
+---
+
+## Bug 10: Streaming error handling became a no-op after headers were sent
+
+### Description
+
+`streamAnalysis` sent the SSE headers before entering the stream loop:
+
+```typescript
+response.writeHead(200, {
+  "Content-Type": "text/event-stream",
+  "Cache-Control": "no-cache",
+  Connection: "keep-alive",
+});
+```
+
+Once those headers were written, `res.headersSent` became `true`. That made the route-level catch in `trials.ts` structurally ineffective for any error that happened during streaming, because it only responded when `!res.headersSent`.
+
+The original `streamAnalysis` loop had no internal `try/catch`, so a mid-stream failure from the OpenAI client would stop the stream without writing a terminal error event, and the client could be left with a truncated SSE response.
+
+I discovered this by tracing the order of `writeHead(...)` and the downstream catch logic, then validating it with a dedicated unit test that forces the async text stream to throw mid-stream.
+
+### Real-World Impact
+
+In production, upstream model failures such as timeouts, disconnects, or rate-limit errors could produce silently broken analysis streams. Clients would receive partial output with no structured error event and no reliable terminal signal explaining what happened.
+
+### Fix
+
+**File:** `starter/src/services/analysis-service.ts`, stream loop in `streamAnalysis`
+
+Wrap the async stream loop in `try/catch/finally` and emit an SSE error event before always ending the response:
+
+```typescript
+try {
+  for await (const chunk of reader) {
+    response.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+  }
+
+  response.write("data: [DONE]\n\n");
+} catch (err) {
+  const message = err instanceof Error ? err.message : "Stream error";
+  response.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+} finally {
+  response.end();
+}
+```
+
+I also added an isolated regression test in `starter/src/__tests__/analysis-service.test.ts` that mocks the AI stream, forces a mid-stream failure, and verifies that `end()` is still called and an error event is written.
+
+### Why This Fix Is Correct
+
+Once SSE headers are sent, the stream body is the only valid channel left for communicating an error to the client. Handling the failure inside `streamAnalysis` ensures that mid-stream failures are surfaced in-band and that the response is always closed cleanly.
+
+### Alternatives Considered
+
+1. **End the stream without writing an error event** — better than hanging, but still opaque to the client.
+2. **Move `writeHead(...)` until after the first chunk** — more complex and still does not solve mid-stream failure handling.
+3. **Catch inside the stream loop, emit an error event, and always `end()`** (chosen) — minimal, explicit, and correct for the SSE lifecycle.
