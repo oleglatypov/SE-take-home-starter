@@ -10,10 +10,20 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const message = err instanceof Error ? err.message : "Internal server error";
+  if (res.headersSent) {
+    return;
+  }
+  res.status(500).json({ error: message });
+});
+
 const PORT = process.env["PORT"] ?? 3000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+if (process.env["VITEST"] !== "true") {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
 
 export { app };
