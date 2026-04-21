@@ -60,6 +60,18 @@ describe("server", () => {
     expect(response.status).toBe(400);
   });
 
+  it("returns 400 when sort is an array", async () => {
+    const response = await request(app).get("/trials?sort=enrollment&sort=startDate");
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 when order is an array", async () => {
+    const response = await request(app).get("/trials?order=asc&order=desc");
+
+    expect(response.status).toBe(400);
+  });
+
   it("returns 400 when sponsor is an array", async () => {
     const response = await request(app).get("/trials?sponsor=A&sponsor=B");
 
@@ -98,6 +110,12 @@ describe("server", () => {
 
   it("returns 400 for negative minEnrollment", async () => {
     const response = await request(app).get("/trials?minEnrollment=-100");
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 400 for empty minEnrollment", async () => {
+    const response = await request(app).get("/trials?minEnrollment=");
 
     expect(response.status).toBe(400);
   });

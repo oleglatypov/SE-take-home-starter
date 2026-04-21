@@ -347,6 +347,24 @@ Regression coverage: `starter/src/__tests__/analysis-service.test.ts`.
 
 ---
 
+## Bug 22: SSE analysis was aborted too early by request `close`
+
+Priority: High
+
+Found: disconnect handling in `starter/src/routes/trials.ts` aborted on `req.once("close")`, which can fire right after the request body is fully read for a POST.
+
+Impact: valid analyze requests could terminate upstream generation before any chunks were emitted, causing streams that returned only `data: [DONE]`.
+
+Fix: switched abort wiring to `res.once("close")` in `starter/src/routes/trials.ts`, line 119, so cancellation tracks actual response-stream termination.
+
+Why this fix is correct: for SSE, the response lifecycle is the authoritative signal that the client connection to the stream has ended.
+
+Alternatives considered: keeping request-level close handling or adding timer-based heuristics. I chose response-level close because it is deterministic and aligned with streaming semantics.
+
+Regression coverage: live curl verification of `/trials/:id/analyze` now emits `data: {"text": ...}` chunks before `[DONE]`, plus passing `starter/src/__tests__/analysis-service.test.ts` and `starter/src/__tests__/audit.test.ts`.
+
+---
+
 ## Additional Note: Prompt Reliability
 
 The analysis prompt in `starter/src/services/analysis-service.ts` is functional, but it is still fairly open-ended. A worthwhile non-blocking improvement would be to tell the model to use only the supplied trial data, to explicitly say when supporting evidence is missing, and to treat trial text as data rather than instructions.

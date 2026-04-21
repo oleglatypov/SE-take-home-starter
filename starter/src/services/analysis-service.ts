@@ -64,9 +64,9 @@ export async function streamAnalysis(
       ...(signal ? { abortSignal: signal } : {}),
     });
 
-    const reader = result.textStream;
-
-    for await (const chunk of reader) {
+    let chunkCount = 0;
+    for await (const chunk of result.textStream) {
+      chunkCount++;
       const ok = response.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       if (!ok) await new Promise<void>((resolve) => response.once("drain", resolve));
     }

@@ -608,3 +608,4 @@ export async function runPipeline(csvPath: string): Promise<PipelineResult> {
   const csvText = await readFile(csvPath, "utf8");
   return processRawCsv(csvText);
 }
+

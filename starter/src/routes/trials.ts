@@ -14,8 +14,7 @@ const VALID_SORT = ["enrollment", "startDate", "adverseEventRate"] as const;
 const VALID_ORDER = ["asc", "desc"] as const;
 
 router.get("/", (req: Request, res: Response<TrialListResponse | ErrorResponse>) => {
-  const { phase, status, minEnrollment, sponsor, search, sort, order } =
-    req.query;
+  const { phase, status, minEnrollment, sponsor, search, sort, order } = req.query;
 
   if (
     phase !== undefined &&
@@ -33,8 +32,7 @@ router.get("/", (req: Request, res: Response<TrialListResponse | ErrorResponse>)
     return;
   }
 
-  const parsedMinEnrollment =
-    minEnrollment === undefined ? undefined : Number(minEnrollment);
+  const parsedMinEnrollment = minEnrollment === undefined ? undefined : Number(minEnrollment);
 
   if (
     parsedMinEnrollment !== undefined &&
@@ -118,7 +116,8 @@ router.post(
 
     try {
       const controller = new AbortController();
-      req.once("close", () => controller.abort());
+      // Abort only when the response stream is actually closed by the client.
+      res.once("close", () => controller.abort());
 
       await streamAnalysis(trial, focus, res, controller.signal);
     } catch (err) {
