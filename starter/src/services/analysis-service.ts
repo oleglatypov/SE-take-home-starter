@@ -38,6 +38,47 @@ ${focusInstructions[focus]}
 Write a 3-paragraph analysis. Be specific to the data above. Do not use generic language.`;
 }
 
+/* function buildPrompt(trial: ClinicalTrial, focus: AnalysisFocus): string {
+  const focusInstructions: Record<AnalysisFocus, string> = {
+    safety: `Focus on the observed safety signal in this trial. Assess the adverse event burden using the reported AE rate and the specific safety findings provided. State whether the current safety profile appears manageable based only on the available data, and identify what safety uncertainty still remains or what monitoring would be most important next.`,
+    efficacy: `Focus on the observed efficacy signal in this trial. Assess the reported response rate if available, the relevance of the primary endpoint, and whether the listed findings support a meaningful signal of activity. If response data is unavailable, state clearly that efficacy interpretation is limited by missing outcome data.`,
+    competitive: `Focus on the trial's position based only on the evidence provided here. Discuss what the phase, status, endpoint, response data, adverse event rate, and key findings suggest about differentiation or maturity of the program. Do not assume external competitor performance, market size, or regulatory outcomes unless directly supported by the trial data above.`,
+  };
+
+  return `You are a pharmaceutical clinical analyst at Pathos Therapeutics.
+
+Analyze the clinical trial using only the information provided below. Do not invent outside facts, competitor benchmarks, market context, standard-of-care comparisons, or regulatory assumptions. If the data is insufficient for a conclusion, say so explicitly.
+
+Trial Data:
+- Trial: ${trial.name} (${trial.id})
+- Sponsor: ${trial.sponsor}
+- Phase: ${trial.phase}
+- Status: ${trial.status}
+- Indication: ${trial.indication}
+- Primary Endpoint: ${trial.primaryEndpoint}
+- Enrollment: ${trial.enrollment}
+- Adverse Event Rate: ${trial.adverseEventRate}%
+- Response Rate: ${trial.responseRate !== null ? `${trial.responseRate}%` : "Not yet available"}
+- Key Findings:
+${trial.keyFindings.map((finding) => `  - ${finding}`).join("\n")}
+
+Analysis Focus:
+${focusInstructions[focus]}
+
+Write exactly 3 paragraphs:
+Paragraph 1: Summarize the most important clinical signal from the trial using concrete facts.
+Paragraph 2: Analyze the trial through the requested focus area using the reported data.
+Paragraph 3: Explain the main limitation, risk, or next question raised by the current evidence.
+
+Requirements:
+- Use at least 3 specific facts from the trial data.
+- Prefer exact numbers when available.
+- Stay grounded in the provided trial data.
+- Avoid generic phrasing and unsupported claims.
+- If response rate is unavailable, explicitly note that this limits interpretation.`;
+}
+*/
+
 export async function streamAnalysis(
   trial: ClinicalTrial,
   focus: AnalysisFocus,
@@ -58,21 +99,29 @@ export async function streamAnalysis(
   });
 
   try {
+    console.log("[streamAnalysis] Starting with API key available:", !!process.env.OPENAI_API_KEY);
+    
     const result = streamText({
       model: openai("gpt-4o-mini"),
       prompt,
       ...(signal ? { abortSignal: signal } : {}),
     });
 
+    console.log("[streamAnalysis] streamText() called, waiting for chunks...");
+
     let chunkCount = 0;
     for await (const chunk of result.textStream) {
       chunkCount++;
+      console.log(`[streamAnalysis] Got chunk ${chunkCount}: "${String(chunk).substring(0, 50)}..."`);
       const ok = response.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       if (!ok) await new Promise<void>((resolve) => response.once("drain", resolve));
     }
 
+    console.log(`[streamAnalysis] Stream ended after ${chunkCount} chunks`);
+
     response.write("data: [DONE]\n\n");
   } catch (err) {
+    console.error("[streamAnalysis] CAUGHT ERROR:", err);
     if (!signal?.aborted) {
       const message = err instanceof Error ? err.message : "Stream error";
       response.write(`data: ${JSON.stringify({ error: message })}\n\n`);
